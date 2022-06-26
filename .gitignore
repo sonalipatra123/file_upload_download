@@ -1,0 +1,12 @@
+__pycache__/
+apis/__pycache__/
+core/__pycache__/
+DB/__pycache__/
+*.py[cod]
+*$py.class
+data/
+static/
+.venv/
+*.pyc
+*.pyo
+venv/
