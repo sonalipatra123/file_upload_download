@@ -7,17 +7,17 @@ def login(args):
     
     # Check if account exists using SqlLite
     try:
-        user_name=args['user_name']
+        email=args['email']
         password=args['password']
         
-        res = fetch_scripts.check_client_credentials(user_name,password)
-        print(res)
+        res = fetch_scripts.check_client_credentials(email,password)
+        # print(res)
         # If account exists show error and validation checks
         if res['flag']:
             
-            msg = {'login':True,'message':'login successful','user_name':user_name}
+            msg = {'login':True,'message':'login successful','email':email}
         else:
-            msg = {'login':False, 'Error':'User name or password is incorrect'}
+            msg = {'login':False, 'Error':'email or password is incorrect'}
 
     except KeyError as error:
         msg = {'login':False,'Error':'Error in login : {}'.format(error)}

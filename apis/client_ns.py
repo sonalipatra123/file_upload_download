@@ -8,10 +8,10 @@ from flask_jwt_extended import (
 from core import login_client as l
 from flask import *  
 from flask_mail import * 
-from itsdangerous import URLSafeTimedSerializer
+from itsdangerous import URLSafeTimedSerializer,SignatureExpired
 from core import file_download
 from db import fetch_scripts,insert_data
-import jwt
+s = URLSafeTimedSerializer('Thisisasecret!')
 api = Namespace('client', description='client related operations')
 
 #################################################### sign up ########################################
@@ -22,12 +22,13 @@ signup.add_argument('password', required = True)
 @api.route("/signup")
 class Signup(Resource):
     
-    s = URLSafeTimedSerializer('Thisisasecret!')
+    
     @api.doc(responses={ 200: 'OK',400: 'Invalid Data' })
     @api.expect(signup)
     def post(self):
         try:
             from app import mail
+            
             args = signup.parse_args()
             email = args["email"]
             password = args["password"]
@@ -37,19 +38,20 @@ class Signup(Resource):
             if old_user['flag']:
                 abort(403)
             # Create a secure token (string) that identifies the user
-            token = jwt.encode({"email": email,"password":password}, current_app.config["SECRET_KEY"])
+            # token = jwt.encode({"email": email,"password":password}, current_app.config["SECRET_KEY"])
             # print(token)
             # Send verification email
-            mail.send(
-                subject="Verify email",
-                receivers=email,
-                html_template="email/verify.html",
-                body_params={
-                    "token": token
-                }
-            )
+            token = s.dumps(email + "|" +password, salt='email-confirm')
+
+            msg = Message('Confirm Email', sender='mama.sona04@gmail.com', recipients=[email])
             
-            return {'flag':True,'message':'mail for email verification is sent to {}'.format(email)}    
+            link = api.url_for('/client/verify', token=token, _external=True)
+            msg.body = 'Your link is {}'.format(link)
+
+            mail.send(msg)
+
+            return '<h1>The email you entered is {}. The token is {}</h1>'.format(email, token)
+   
 
         except KeyError as e:
             api.abort(500, e.__doc__, status = "error in server", statusCode = "500")
@@ -60,18 +62,25 @@ class Signup(Resource):
 ######################################## Verify Email #################################################
 verify = reqparse.RequestParser()
 verify.add_argument('token', required = True)
-@api.route("/token")
-class VerifyToken(Resource):
+@api.route("/verify")
+class Verify(Resource):
     @api.doc(responses={ 200: 'OK',400: 'Invalid Data' })
     @api.expect(verify)
-    def post(self):
+    def post(self,token):
         try:
             args = verify.parse_args()
-            data = jwt.decode(args['token'], current_app.config["SECRET_KEY"])
-            email_address = data["email"]
-            password = data["password"]
+            # data = jwt.decode(args['token'], current_app.config["SECRET_KEY"])
+            try:
+                emailpassword = s.loads(args['token'], salt='email-confirm', max_age=3600)
+                epasslist = emailpassword.split("|")
+                email = epasslist[0]
+                password = epasslist[1]
+                msg = insert_data.insert_client(email,password)
+            except SignatureExpired:
+                return '<h1>The token is expired!</h1>'
+            
 
-            msg = insert_data.insert_client(email_address,password)
+            
             if msg['flag']:
                 # when authenticated, return a fresh access token and a refresh token
                 access_token = create_access_token(identity=msg['email'], fresh=True)                
@@ -85,7 +94,7 @@ class VerifyToken(Resource):
             api.abort(500, e.__doc__, status = "Error", statusCode = "500")
         except Exception as e:
             api.abort(400, e.__doc__, status = "Error", statusCode = "400")
-
+# api.add_resource(Verify, '/verify/<token>', endpoint = 'verify_email')
 ########################################### LOGIN ######################################################
 
 login = reqparse.RequestParser()
